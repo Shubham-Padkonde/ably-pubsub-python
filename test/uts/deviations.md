@@ -353,6 +353,30 @@ A connect callable that raises reaches the library's failure handling exactly
 where a real one does, so a refused connection, a DNS error and a timeout are
 simulated by the exception the callable raises.
 
+### Fake time is a clock, and a last resort
+
+Every reading of the time and every delayed callback in the library goes
+through `ably.util.clock.Clock`, selected once per consumer by
+`select_clock(options)` and replaced by `TestOptions(clock=...)`.
+`test/uts/helpers/clock.py` is the fake: `await clock.advance(ms)` moves the
+notional time on, fires what has fallen due in due order, and lets the event
+loop settle so the effects have landed when it returns. It is the
+`enable_fake_timers()` / `ADVANCE_TIME(ms)` pair of `mock_websocket.md`.
+
+The option is client-scoped for the same reason the HTTP mock is: a
+module-level factory would outlive the test that set it and be shared by every
+client the suite builds.
+
+A derived test reaches for it where nothing else reaches the behaviour.
+`realtime_request_timeout`, `disconnected_retry_timeout`,
+`suspended_retry_timeout` and `channel_retry_timeout` are client options, so a
+real short value drives those and the test stays free of the interaction
+between faked time and the real `await`s around it. Two things have no such
+handle: `connection_state_ttl`, which is not a constructor parameter and which
+the suspend timer reads from `Defaults` at a cost of 120 real seconds, and the
+transport's idle detection, which arms its timer and measures the silence
+against the same clock. Those are what the fake clock is for.
+
 ### A mock serves one client rather than being installed globally
 
 The specifications write `install_mock(mock_http)` and warn against passing a
@@ -406,7 +430,7 @@ renaming; the function name makes failures readable without it.
 reads, which `rest_client(mock_http, clock=...)` replaces. The derived REST tests
 shorten the interval through a client option instead, which is what the
 specifications themselves do for `fallback_retry_timeout`, and reach for the clock
-only where no option exposes the interval.
+only where no option exposes the interval; see the fake time section above.
 
 ### A TokenDetails payload is recognised by its `token`, not only by `issued`
 

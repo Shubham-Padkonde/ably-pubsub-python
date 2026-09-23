@@ -7,9 +7,9 @@ from ably.util.helper import Timer
 class Clock:
     """The source of time for every decision a client makes from it.
 
-    Token expiry, the server-time offset and the fallback-host cache all read
-    the clock, and delayed callbacks are scheduled through it, so replacing one
-    moves all of them together.
+    Token expiry, the server-time offset, the fallback-host cache and the
+    transport's idle detection all read the clock, and every delayed callback
+    is scheduled through it, so replacing one moves all of them together.
 
     `now_ms` is the time of day and may step; `monotonic_ms` only ever moves
     forward and is what a duration is measured with.

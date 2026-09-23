@@ -14,9 +14,9 @@ from ably.http.httputils import HttpUtils
 from ably.transport.defaults import Defaults
 from ably.types.connectiondetails import ConnectionDetails
 from ably.types.operations import PublishResult
+from ably.util.clock import select_clock
 from ably.util.eventemitter import EventEmitter
 from ably.util.exceptions import AblyException
-from ably.util.helper import Timer, unix_time_ms
 
 try:
     # websockets 15+ preferred imports
@@ -69,6 +69,7 @@ class WebSocketTransport(EventEmitter):
         self.connection_manager = connection_manager
         self.options = self.connection_manager.options
         self.connect_func = self.__select_connect_func(self.options)
+        self.clock = select_clock(self.options)
         self.is_connected = False
         self.idle_timer = None
         self.last_activity = None
@@ -302,11 +303,11 @@ class WebSocketTransport(EventEmitter):
     def set_idle_timer(self, timeout: float):
         if self.idle_timer:
             self.idle_timer.cancel()
-        self.idle_timer = Timer(timeout, self.on_idle_timer_expire)
+        self.idle_timer = self.clock.timer(timeout, self.on_idle_timer_expire)
 
     async def on_idle_timer_expire(self):
         self.idle_timer = None
-        since_last = unix_time_ms() - self.last_activity
+        since_last = self.clock.now_ms() - self.last_activity
         time_remaining = self.max_idle_interval - since_last
         msg = f"No activity seen from realtime in {since_last} ms; assuming connection has dropped"
         if time_remaining <= 0:
@@ -318,7 +319,7 @@ class WebSocketTransport(EventEmitter):
     def on_activity(self):
         if not self.max_idle_interval:
             return
-        self.last_activity = unix_time_ms()
+        self.last_activity = self.clock.now_ms()
         self.set_idle_timer(self.max_idle_interval + 100)
 
     async def disconnect(self, reason=None):
