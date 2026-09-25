@@ -1,7 +1,6 @@
 import functools
 import json
 import logging
-import time
 from urllib.parse import urljoin
 
 import httpx
@@ -10,6 +9,7 @@ import msgpack
 from ably.http.httputils import HttpUtils
 from ably.rest.auth import Auth
 from ably.transport.defaults import Defaults
+from ably.util.clock import select_clock
 from ably.util.exceptions import AblyException
 from ably.util.helper import extract_url_params, is_token_error
 
@@ -129,6 +129,7 @@ class Http:
         # Cached fallback host (RSC15f)
         self.__host = None
         self.__host_expires = None
+        self.__clock = select_clock(options)
         self.__client = self.__create_client(options)
 
     @staticmethod
@@ -154,7 +155,7 @@ class Http:
             return hosts
 
         # unstore saved fallback host after fallbackRetryTimeout (RSC15f)
-        if self.__host_expires is not None and time.time() > self.__host_expires:
+        if self.__host_expires is not None and self.__clock.now_ms() > self.__host_expires:
             self.__host = None
             self.__host_expires = None
             return hosts
@@ -191,12 +192,12 @@ class Http:
 
         timeout = (self.http_open_timeout, self.http_request_timeout)
         http_max_retry_duration = self.http_max_retry_duration
-        requested_at = time.time()
+        requested_at = self.__clock.now_ms()
 
         hosts = self.get_hosts()
         for retry_count, host in enumerate(hosts):
             def should_stop_retrying(retry_count=retry_count):
-                time_passed = time.time() - requested_at
+                time_passed = (self.__clock.now_ms() - requested_at) / 1000
                 # if it's the last try or cumulative timeout is done, we stop retrying
                 return retry_count == len(hosts) - 1 or time_passed > http_max_retry_duration
 
@@ -238,7 +239,7 @@ class Http:
                     # Keep fallback host for later (RSC15f)
                     if retry_count > 0 and host != self.options.get_host():
                         self.__host = host
-                        self.__host_expires = time.time() + (self.options.fallback_retry_timeout / 1000.0)
+                        self.__host_expires = self.__clock.now_ms() + self.options.fallback_retry_timeout
 
                     return Response(response)
                 except AblyException as e:

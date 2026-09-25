@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import time
 import uuid
 from datetime import timedelta
 from typing import TYPE_CHECKING
@@ -18,6 +17,7 @@ if TYPE_CHECKING:
 from ably.types.capability import Capability
 from ably.types.tokendetails import TokenDetails
 from ably.types.tokenrequest import TokenRequest
+from ably.util.clock import select_clock
 from ably.util.exceptions import AblyAuthException, AblyException, IncompatibleClientIdException
 from ably.util.helper import extract_url_params
 
@@ -34,6 +34,7 @@ class Auth:
     def __init__(self, ably: AblyRest | AblyRealtime, options: Options):
         self.__ably = ably
         self.__auth_options = options
+        self.__clock = select_clock(options)
 
         if not self.ably._is_realtime:
             self.__client_id = options.client_id
@@ -383,7 +384,7 @@ class Auth:
 
     def _timestamp(self):
         """Returns the local time in milliseconds since the unix epoch"""
-        return int(time.time() * 1000)
+        return self.__clock.now_ms()
 
     def _random_nonce(self):
         return uuid.uuid4().hex[:16]
