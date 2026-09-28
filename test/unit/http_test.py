@@ -36,7 +36,7 @@ class RecordingTransport(httpx.AsyncBaseTransport):
 
 async def test_http_sends_requests_through_an_injected_transport():
     transport = RecordingTransport(lambda request: httpx.Response(200, json=[1500000000000]))
-    ably = AblyRest(token="foo", test_options=TestOptions(http_transport=transport))
+    ably = AblyRest(token="foo", _test_options=TestOptions(http_transport=transport))
 
     server_time = await ably.time()
 
@@ -52,7 +52,7 @@ async def test_http_surfaces_transport_connection_errors():
         raise httpx.ConnectError("connection refused", request=request)
 
     transport = RecordingTransport(refuse)
-    ably = AblyRest(token="foo", test_options=TestOptions(http_transport=transport))
+    ably = AblyRest(token="foo", _test_options=TestOptions(http_transport=transport))
 
     with pytest.raises(AblyException):
         await ably.time()
@@ -75,7 +75,7 @@ async def test_auth_url_requests_go_through_the_client_http_layer():
 
     transport = RecordingTransport(respond)
     ably = AblyRest(auth_url='https://auth.example.com/token',
-                    test_options=TestOptions(http_transport=transport))
+                    _test_options=TestOptions(http_transport=transport))
 
     await ably.auth.authorize()
 
