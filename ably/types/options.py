@@ -34,7 +34,7 @@ class Options(AuthOptions):
                  idempotent_rest_publishing=None, loop=None, auto_connect=True,
                  suspended_retry_timeout=None, connectivity_check_url=None,
                  channel_retry_timeout=Defaults.channel_retry_timeout, add_request_ids=False,
-                 vcdiff_decoder: VCDiffDecoder = None, transport_params=None, test_options=None,
+                 vcdiff_decoder: VCDiffDecoder = None, transport_params=None, _test_options=None,
                  **kwargs):
 
         super().__init__(**kwargs)
@@ -130,7 +130,7 @@ class Options(AuthOptions):
         self.__add_request_ids = add_request_ids
         self.__vcdiff_decoder = vcdiff_decoder
         self.__transport_params = transport_params or {}
-        self.__test_options = test_options
+        self.__test_options = _test_options
         self.__hosts = self.__get_hosts()
 
     @property
@@ -309,7 +309,7 @@ class Options(AuthOptions):
         return self.__transport_params
 
     @property
-    def test_options(self):
+    def _test_options(self):
         return self.__test_options
 
     def __get_hosts(self):

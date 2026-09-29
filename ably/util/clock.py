@@ -35,7 +35,7 @@ def select_clock(options) -> Clock:
     drive time-dependent behaviour without waiting for it. Clients which supply
     none get `Clock`.
     """
-    test_options = getattr(options, 'test_options', None)
+    test_options = getattr(options, '_test_options', None)
     if test_options is not None and test_options.clock is not None:
         return test_options.clock
     return Clock()
