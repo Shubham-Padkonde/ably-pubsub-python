@@ -100,7 +100,9 @@ class TestRestRequest(BaseAsyncTestCase, metaclass=VaryByProtocolTestsMetaclass)
         timeout = 0.000001
         ably = AblyRest(token="foo", http_request_timeout=timeout)
         assert ably.http.http_request_timeout == timeout
-        with pytest.raises(httpx.ReadTimeout):
+        # `http_open_timeout` keeps its four-second default, so the request carries a
+        # connect budget as well as a read budget and either can be the one to expire
+        with pytest.raises(httpx.TimeoutException):
             await ably.request('GET', '/time', version=Defaults.protocol_version)
         await ably.close()
 
