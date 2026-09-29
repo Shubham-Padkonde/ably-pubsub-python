@@ -75,6 +75,7 @@ class Timer:
     def cancel(self):
         self._task.cancel()
 
+
 def validate_message_size(encoded_messages: list, use_binary_protocol: bool, max_message_size: int) -> None:
     """Validate that encoded messages don't exceed the maximum size limit.
 

@@ -6,6 +6,12 @@ class TestOptions:
     :Parameters:
       - `http_transport`: an `httpx.AsyncBaseTransport` which handles every
         HTTP request the client makes, in place of the network.
+      - `websocket_connect`: a callable which opens every realtime websocket
+        connection the client makes, in place of `websockets.connect`. It is
+        called as `websocket_connect(url, additional_headers=headers)`, or with
+        `extra_headers=headers` if that raises `TypeError`, and returns an async
+        context manager yielding an object supporting `__aiter__`, `send` and
+        `close`.
       - `clock`: the source of time the client reads, in place of
         `ably.util.clock.Clock`. It supplies `now_ms()`, `monotonic_ms()` and
         `timer(timeout_ms, callback)`, where `callback` is either a coroutine
@@ -17,6 +23,7 @@ class TestOptions:
     # any module importing it as declaring a test suite.
     __test__ = False
 
-    def __init__(self, http_transport=None, clock=None):
+    def __init__(self, http_transport=None, websocket_connect=None, clock=None):
         self.http_transport = http_transport
+        self.websocket_connect = websocket_connect
         self.clock = clock

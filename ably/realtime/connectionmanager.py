@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from collections import deque
 from itertools import zip_longest
 from typing import TYPE_CHECKING
@@ -16,6 +15,7 @@ from ably.types.connectionerrors import ConnectionErrors
 from ably.types.connectionstate import ConnectionEvent, ConnectionState, ConnectionStateChange
 from ably.types.operations import PublishResult
 from ably.types.tokendetails import TokenDetails
+from ably.util.clock import Clock, select_clock
 from ably.util.eventemitter import EventEmitter
 from ably.util.exceptions import AblyException, IncompatibleClientIdException
 from ably.util.helper import Timer, get_random_id, is_token_error
@@ -123,10 +123,11 @@ class PendingMessageQueue:
 class PendingPing:
     """Represents a ping awaiting its heartbeat echo from the server"""
 
-    def __init__(self, id: str):
+    def __init__(self, id: str, clock: Clock):
         self.id = id
+        self.clock = clock
         self.future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
-        self.start_time: float = time.monotonic()
+        self.start_time: float = clock.monotonic_ms()
 
     @property
     def message(self) -> dict:
@@ -134,12 +135,13 @@ class PendingPing:
 
     @property
     def response_time_ms(self) -> float:
-        return round((time.monotonic() - self.start_time) * 1000, 2)
+        return round(self.clock.monotonic_ms() - self.start_time, 2)
 
 
 class ConnectionManager(EventEmitter):
     def __init__(self, realtime: AblyRealtime, initial_state):
         self.options = realtime.options
+        self.clock = select_clock(self.options)
         self.__ably = realtime
         self.__state: ConnectionState = initial_state
         self.__pending_pings: dict[str, PendingPing] = {}
@@ -364,7 +366,7 @@ class ConnectionManager(EventEmitter):
             raise AblyException("Cannot send ping request. Calling ping in invalid state", 400, 40000)
 
         # RTN13e: the id tells this ping's echo apart from server heartbeats and other pings
-        pending_ping = PendingPing(get_random_id())
+        pending_ping = PendingPing(get_random_id(), self.clock)
         self.__pending_pings[pending_ping.id] = pending_ping
         try:
             # RTN13d: while connecting, the heartbeat goes out once the connection is established
@@ -379,7 +381,7 @@ class ConnectionManager(EventEmitter):
         return pending_ping.response_time_ms
 
     async def __send_heartbeat(self, pending_ping: PendingPing) -> None:
-        pending_ping.start_time = time.monotonic()
+        pending_ping.start_time = self.clock.monotonic_ms()
         try:
             await self.send_protocol_message(pending_ping.message)
         except Exception as error:
@@ -718,7 +720,7 @@ class ConnectionManager(EventEmitter):
 
         log.debug(f'ConnectionManager.start_transition_timer(): setting timer for {timeout}ms')
 
-        self.transition_timer = Timer(timeout, on_transition_timer_expire)
+        self.transition_timer = self.clock.timer(timeout, on_transition_timer_expire)
 
     def cancel_transition_timer(self):
         log.debug('ConnectionManager.cancel_transition_timer()')
@@ -741,7 +743,7 @@ class ConnectionManager(EventEmitter):
                 )
                 self.__fail_state = ConnectionState.SUSPENDED
 
-        self.suspend_timer = Timer(Defaults.connection_state_ttl, on_suspend_timer_expire)
+        self.suspend_timer = self.clock.timer(Defaults.connection_state_ttl, on_suspend_timer_expire)
 
     def check_suspend_timer(self, state: ConnectionState) -> None:
         if state not in (
@@ -764,7 +766,7 @@ class ConnectionManager(EventEmitter):
             self.retry_timer = None
             self.request_state(ConnectionState.CONNECTING)
 
-        self.retry_timer = Timer(interval, on_retry_timeout)
+        self.retry_timer = self.clock.timer(interval, on_retry_timeout)
 
     def cancel_retry_timer(self) -> None:
         if self.retry_timer:
